@@ -21,7 +21,7 @@ parser.add_argument('--seed_data', type=int, default=1)
 parser.add_argument('--count', type=int, default=100)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--unlabeled_weight', type=float, default=1.)
-parser.add_argument('--learning_rate', type=float, default=0.0003)
+parser.add_argument('--learning_rate', type=float, default=0.001)
 parser.add_argument('--data_dir', type=str, default='.')
 args = parser.parse_args()
 print(args)
@@ -98,7 +98,7 @@ l_lab = output_before_softmax_lab[T.arange(args.batch_size),labels]
 l_unl = nn.log_sum_exp(output_before_softmax_unl)
 l_gen = nn.log_sum_exp(output_before_softmax_gen)
 loss_lab = -T.mean(l_lab) + T.mean(T.mean(nn.log_sum_exp(output_before_softmax_lab)))
-loss_unl = -0.5*T.mean(l_unl) + 0.5*T.mean(T.nnet.softplus(l_unl)) + 0.5*T.mean(T.nnet.softplus(l_gen))
+loss_unl = -0.5*T.mean(l_unl) + 0.5*T.mean(T.nnet.softplus(l_unl)) #+ 0.5*T.mean(T.nnet.softplus(l_gen))
 
 train_err = T.mean(T.neq(T.argmax(output_before_softmax_lab,axis=1),labels))
 
@@ -160,7 +160,7 @@ def augment(X, p=2):
         X_aug[i,:,:,:] = X[i, :, ofs0:ofs0+32, ofs1:ofs1+32]
     return X_aug
 
-ramp_time = 30
+ramp_time = 80
 def rampup(epoch):
     if epoch < ramp_time:
         p = max(0.0, float(epoch)) / float(ramp_time)
@@ -232,7 +232,7 @@ for epoch in range(900):
         loss_unl += lu
         train_err += te
         
-        train_batch_gen(trainx_unl2[t*args.batch_size:(t+1)*args.batch_size],lr)
+        # train_batch_gen(trainx_unl2[t*args.batch_size:(t+1)*args.batch_size],lr)
 
     loss_lab /= nr_batches_train
     loss_unl /= nr_batches_train
