@@ -22,7 +22,7 @@ parser.add_argument('--count', type=int, default=100)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--unlabeled_weight', type=float, default=1.)
 parser.add_argument('--learning_rate', type=float, default=0.0003)
-parser.add_argument('--data_dir', type=str, default='/home/tim/data')
+parser.add_argument('--data_dir', type=str, default='.')
 args = parser.parse_args()
 print(args)
 
@@ -86,6 +86,14 @@ output_before_softmax_lab = ll.get_output(disc_layers[-1], x_lab, deterministic=
 output_before_softmax_unl = ll.get_output(disc_layers[-1], x_unl, deterministic=False)
 output_before_softmax_gen = ll.get_output(disc_layers[-1], gen_dat, deterministic=False)
 
+# copies for stability regularizer
+unsup_weight_var = T.scalar('unsup_weight')
+x_lab2 = T.tensor4()
+x_unl2 = T.tensor4()
+output_before_softmax_lab2 = ll.get_output(disc_layers[-1], x_lab2, deterministic=False)
+output_before_softmax_unl2 = ll.get_output(disc_layers[-1], x_unl2, deterministic=False)
+
+
 l_lab = output_before_softmax_lab[T.arange(args.batch_size),labels]
 l_unl = nn.log_sum_exp(output_before_softmax_unl)
 l_gen = nn.log_sum_exp(output_before_softmax_gen)
@@ -101,12 +109,22 @@ test_err = T.mean(T.neq(T.argmax(output_before_softmax,axis=1),labels))
 # Theano functions for training the disc net
 lr = T.scalar()
 disc_params = ll.get_all_params(disc_layers, trainable=True)
-disc_param_updates = nn.adam_updates(disc_params, loss_lab + args.unlabeled_weight*loss_unl, lr=lr, mom1=0.5)
+
+# create disc loss
+loss_stab_lab = T.mean(lasagne.objectives.squared_error(
+    T.nnet.softmax(output_before_softmax_lab), T.nnet.softmax(output_before_softmax_lab2)))
+loss_stab_unl = T.mean(lasagne.objectives.squared_error(
+    T.nnet.softmax(output_before_softmax_unl), T.nnet.softmax(output_before_softmax_unl2)))
+loss_disc = (loss_lab + unsup_weight_var * loss_stab_lab) \
+          + args.unlabeled_weight*(loss_unl + unsup_weight_var * loss_stab_unl)
+
+disc_param_updates = nn.adam_updates(disc_params, loss_disc, lr=lr, mom1=0.5)
 disc_param_avg = [th.shared(np.cast[th.config.floatX](0.*p.get_value())) for p in disc_params]
 disc_avg_updates = [(a,a+0.0001*(p-a)) for p,a in zip(disc_params,disc_param_avg)]
 disc_avg_givens = [(p,a) for p,a in zip(disc_params,disc_param_avg)]
 init_param = th.function(inputs=[x_lab], outputs=None, updates=init_updates)
-train_batch_disc = th.function(inputs=[x_lab,labels,x_unl,lr], outputs=[loss_lab, loss_unl, train_err], updates=disc_param_updates+disc_avg_updates)
+
+train_batch_disc = th.function(inputs=[x_lab,x_lab2,labels,x_unl,x_unl2,lr,unsup_weight_var], outputs=[loss_lab, loss_unl, train_err], updates=disc_param_updates+disc_avg_updates)
 test_batch = th.function(inputs=[x_lab], outputs=output_before_softmax, givens=disc_avg_givens)
 samplefun = th.function(inputs=[],outputs=gen_dat)
 
@@ -133,21 +151,64 @@ for j in range(10):
 txs = np.concatenate(txs, axis=0)
 tys = np.concatenate(tys, axis=0)
 
+def augment(X, p=2):
+    X_aug = np.zeros(X.shape, dtype='float32')
+    X = np.pad(X, ((0, 0), (0, 0), (p, p), (p, p)), 'reflect')
+    for i in range(len(X)):
+        ofs0 = np.random.randint(-p, p + 1) + p
+        ofs1 = np.random.randint(-p, p + 1) + p
+        X_aug[i,:,:,:] = X[i, :, ofs0:ofs0+32, ofs1:ofs1+32]
+    return X_aug
+
+ramp_time = 30
+def rampup(epoch):
+    if epoch < ramp_time:
+        p = max(0.0, float(epoch)) / float(ramp_time)
+        p = 1.0 - p
+        return np.exp(-p*p*5.0)
+    else:
+        return 1.0    
+
 # //////////// perform training //////////////
 for epoch in range(900):
     begin = time.time()
     lr = np.cast[th.config.floatX](args.learning_rate * np.minimum(3. - epoch/300., 1.))
 
+    # set unsupervised weight
+    scaled_unsup_weight_max = 100
+    rampup_value = rampup(epoch)
+    unsup_weight = rampup_value * scaled_unsup_weight_max
+    unsup_weight = np.cast[th.config.floatX](unsup_weight)
+
     # construct randomly permuted minibatches
     trainx = []
+    trainxa = []
+    trainxb = []
+    trainx2 = []
+    trainx2 = []
     trainy = []
     for t in range(int(np.ceil(trainx_unl.shape[0]/float(txs.shape[0])))):
         inds = rng.permutation(txs.shape[0])
         trainx.append(txs[inds])
+        trainxa.append(augment(txs[inds]))
+        trainxb.append(augment(txs[inds]))
         trainy.append(tys[inds])
     trainx = np.concatenate(trainx, axis=0)
+    trainxa = np.concatenate(trainxa, axis=0)
+    trainxb = np.concatenate(trainxb, axis=0)
     trainy = np.concatenate(trainy, axis=0)
     trainx_unl = trainx_unl[rng.permutation(trainx_unl.shape[0])]
+    
+    trainx_unla = augment(trainx_unl)
+    trainx_unlb = augment(trainx_unl)
+
+    # print 'making samples...'
+    # for i in range(5):
+    #     scipy.misc.imsave('%da.png' % i, trainx_unla[i,0,:,:])
+    #     scipy.misc.imsave('%db.png' % i, trainx_unlb[i,0,:,:])
+    #     scipy.misc.imsave('%dc.png' % i, trainxa[i,0,:,:])
+    #     scipy.misc.imsave('%dd.png' % i, trainxb[i,0,:,:])
+
     trainx_unl2 = trainx_unl2[rng.permutation(trainx_unl2.shape[0])]
     
     if epoch==0:
@@ -161,8 +222,12 @@ for epoch in range(900):
     for t in range(nr_batches_train):
         ran_from = t*args.batch_size
         ran_to = (t+1)*args.batch_size
-        ll, lu, te = train_batch_disc(trainx[ran_from:ran_to],trainy[ran_from:ran_to],
-                                      trainx_unl[ran_from:ran_to],lr)
+        ll, lu, te = train_batch_disc(trainxa[ran_from:ran_to],
+                                      trainxb[ran_from:ran_to],
+                                      trainy[ran_from:ran_to],
+                                      trainx_unla[ran_from:ran_to],
+                                      trainx_unlb[ran_from:ran_to],
+                                      lr, unsup_weight)
         loss_lab += ll
         loss_unl += lu
         train_err += te
@@ -195,8 +260,8 @@ for epoch in range(900):
     scipy.misc.imsave("svhn_sample_feature_match.png", imgs)
 
     # save params
-    #np.savez('disc_params.npz',*[p.get_value() for p in disc_params])
-    #np.savez('gen_params.npz',*[p.get_value() for p in gen_params])
+    np.savez('disc_params.npz',*[p.get_value() for p in disc_params])
+    np.savez('gen_params.npz',*[p.get_value() for p in gen_params])
 
 
 
