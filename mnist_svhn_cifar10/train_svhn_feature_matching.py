@@ -21,7 +21,7 @@ parser.add_argument('--seed_data', type=int, default=1)
 parser.add_argument('--count', type=int, default=100)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--unlabeled_weight', type=float, default=1.)
-parser.add_argument('--learning_rate', type=float, default=0.001)
+parser.add_argument('--learning_rate', type=float, default=0.003)
 parser.add_argument('--data_dir', type=str, default='.')
 args = parser.parse_args()
 print(args)
@@ -172,13 +172,15 @@ def rampup(epoch):
 # //////////// perform training //////////////
 for epoch in range(900):
     begin = time.time()
-    lr = np.cast[th.config.floatX](args.learning_rate * np.minimum(3. - epoch/300., 1.))
 
     # set unsupervised weight
     scaled_unsup_weight_max = 100
     rampup_value = rampup(epoch)
     unsup_weight = rampup_value * scaled_unsup_weight_max
     unsup_weight = np.cast[th.config.floatX](unsup_weight)
+
+    # set learning rate
+    lr = np.cast[th.config.floatX](args.learning_rate * rampup_value * np.minimum(3. - epoch/300., 1.))
 
     # construct randomly permuted minibatches
     trainx = []
