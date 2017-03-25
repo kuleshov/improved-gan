@@ -21,7 +21,7 @@ parser.add_argument('--seed_data', type=int, default=1)
 parser.add_argument('--count', type=int, default=100)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--unlabeled_weight', type=float, default=1.)
-parser.add_argument('--learning_rate', type=float, default=0.003)
+parser.add_argument('--learning_rate', type=float, default=0.0003)
 parser.add_argument('--data_dir', type=str, default='.')
 args = parser.parse_args()
 print(args)
@@ -59,16 +59,16 @@ gen_dat = ll.get_output(gen_layers[-1])
 # specify discriminative model
 disc_layers = [ll.InputLayer(shape=(None, 3, 32, 32))]
 disc_layers.append(ll.DropoutLayer(disc_layers[-1], p=0.2))
-disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 64, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
-disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 64, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
-disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 64, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu)))
-disc_layers.append(ll.DropoutLayer(disc_layers[-1], p=0.5))
 disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 128, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
 disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 128, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
 disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 128, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu)))
 disc_layers.append(ll.DropoutLayer(disc_layers[-1], p=0.5))
-disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 128, (3,3), pad=0, W=Normal(0.05), nonlinearity=nn.lrelu)))
-disc_layers.append(nn.weight_norm(ll.NINLayer(disc_layers[-1], num_units=128, W=Normal(0.05), nonlinearity=nn.lrelu)))
+disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 256, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
+disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 256, (3,3), pad=1, W=Normal(0.05), nonlinearity=nn.lrelu)))
+disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 256, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu)))
+disc_layers.append(ll.DropoutLayer(disc_layers[-1], p=0.5))
+disc_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(disc_layers[-1], 512, (3,3), pad=0, W=Normal(0.05), nonlinearity=nn.lrelu)))
+disc_layers.append(nn.weight_norm(ll.NINLayer(disc_layers[-1], num_units=256, W=Normal(0.05), nonlinearity=nn.lrelu)))
 disc_layers.append(nn.weight_norm(ll.NINLayer(disc_layers[-1], num_units=128, W=Normal(0.05), nonlinearity=nn.lrelu)))
 disc_layers.append(ll.GlobalPoolLayer(disc_layers[-1]))
 disc_layers.append(nn.weight_norm(ll.DenseLayer(disc_layers[-1], num_units=10, W=Normal(0.05), nonlinearity=None), train_g=True, init_stdv=0.1))
@@ -98,7 +98,7 @@ l_lab = output_before_softmax_lab[T.arange(args.batch_size),labels]
 l_unl = nn.log_sum_exp(output_before_softmax_unl)
 l_gen = nn.log_sum_exp(output_before_softmax_gen)
 loss_lab = -T.mean(l_lab) + T.mean(T.mean(nn.log_sum_exp(output_before_softmax_lab)))
-loss_unl = -0.5*T.mean(l_unl) + 0.5*T.mean(T.nnet.softplus(l_unl)) #+ 0.5*T.mean(T.nnet.softplus(l_gen))
+loss_unl = -0.5*T.mean(l_unl) + 0.5*T.mean(T.nnet.softplus(l_unl)) + 0.5*T.mean(T.nnet.softplus(l_gen))
 
 train_err = T.mean(T.neq(T.argmax(output_before_softmax_lab,axis=1),labels))
 
@@ -160,7 +160,7 @@ def augment(X, p=2):
         X_aug[i,:,:,:] = X[i, :, ofs0:ofs0+32, ofs1:ofs1+32]
     return X_aug
 
-ramp_time = 80
+ramp_time = 30
 def rampup(epoch):
     if epoch < ramp_time:
         p = max(0.0, float(epoch)) / float(ramp_time)
@@ -180,7 +180,8 @@ for epoch in range(900):
     unsup_weight = np.cast[th.config.floatX](unsup_weight)
 
     # set learning rate
-    lr = np.cast[th.config.floatX](args.learning_rate * rampup_value * np.minimum(3. - epoch/300., 1.))
+    lr = np.cast[th.config.floatX](args.learning_rate * np.minimum(3. - epoch/300., 1.))
+    # lr = np.cast[th.config.floatX](args.learning_rate * rampup_value * np.minimum(3. - epoch/300., 1.))
 
     # construct randomly permuted minibatches
     trainx = []
@@ -234,7 +235,7 @@ for epoch in range(900):
         loss_unl += lu
         train_err += te
         
-        # train_batch_gen(trainx_unl2[t*args.batch_size:(t+1)*args.batch_size],lr)
+        train_batch_gen(trainx_unl2[t*args.batch_size:(t+1)*args.batch_size],lr)
 
     loss_lab /= nr_batches_train
     loss_unl /= nr_batches_train
