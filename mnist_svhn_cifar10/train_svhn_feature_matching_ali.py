@@ -148,10 +148,11 @@ lr = T.scalar()
 disc_params = ll.get_all_params(disc_layers+discz_layers, trainable=True)
 
 # create disc loss
-loss_stab_lab = T.mean(lasagne.objectives.squared_error(
-    T.nnet.softmax(output_before_softmax_lab), T.nnet.softmax(output_before_softmax_lab2)))
-loss_stab_unl = T.mean(lasagne.objectives.squared_error(
-    T.nnet.softmax(output_before_softmax_unl), T.nnet.softmax(output_before_softmax_unl2)))
+loss_stab_lab = 0
+# T.mean(lasagne.objectives.squared_error(
+#     T.nnet.softmax(output_before_softmax_lab), T.nnet.softmax(output_before_softmax_lab2)))
+loss_stab_unl = 0# T.mean(lasagne.objectives.squared_error(
+    # T.nnet.softmax(output_before_softmax_unl), T.nnet.softmax(output_before_softmax_unl2)))
 loss_disc = (loss_lab + unsup_weight_var * loss_stab_lab) \
           + args.unlabeled_weight*(loss_unl + unsup_weight_var * loss_stab_unl)
 
@@ -161,7 +162,7 @@ disc_avg_updates = [(a,a+0.0001*(p-a)) for p,a in zip(disc_params,disc_param_avg
 disc_avg_givens = [(p,a) for p,a in zip(disc_params,disc_param_avg)]
 init_param = th.function(inputs=[x_lab], outputs=None, updates=init_updates)
 
-train_batch_disc = th.function(inputs=[x_lab,x_lab2,labels,x_unl,x_unl2,lr,unsup_weight_var], outputs=[loss_lab, loss_unl, train_err], updates=disc_param_updates+disc_avg_updates)
+train_batch_disc = th.function(inputs=[x_lab,labels,x_unl,lr,unsup_weight_var], outputs=[loss_lab, loss_unl, train_err], updates=disc_param_updates+disc_avg_updates)
 test_batch = th.function(inputs=[x_lab], outputs=output_before_softmax, givens=disc_avg_givens)
 samplefun = th.function(inputs=[],outputs=gen_dat)
 
@@ -263,10 +264,8 @@ for epoch in range(900):
         ran_from = t*args.batch_size
         ran_to = (t+1)*args.batch_size
         ll, lu, te = train_batch_disc(trainxa[ran_from:ran_to],
-                                      trainxb[ran_from:ran_to],
                                       trainy[ran_from:ran_to],
                                       trainx_unla[ran_from:ran_to],
-                                      trainx_unlb[ran_from:ran_to],
                                       lr, unsup_weight)
         loss_lab += ll
         loss_unl += lu
@@ -286,8 +285,12 @@ for epoch in range(900):
         test_pred[first_ind:last_ind] = test_batch(testx[first_ind:last_ind])
     test_err = np.mean(np.argmax(test_pred,axis=1) != testy)
 
-    print("Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err))
+    expname = 'ali-vanilla-%.4fuw-smallmodel-augmentation-seed%d' % (args.unlabeled_weight, args.seed)
+    out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
+    print(out_str)
     sys.stdout.flush()
+    with open(expname + '.log', 'a') as f:
+        f.write(out_str + '\n')
 
     # sample
     imgs = samplefun()
@@ -300,8 +303,8 @@ for epoch in range(900):
     scipy.misc.imsave("svhn_sample_feature_match.png", imgs)
 
     # save params
-    np.savez('disc_params.npz',*[p.get_value() for p in disc_params])
-    np.savez('gen_params.npz',*[p.get_value() for p in gen_params])
+    np.savez('%s.disc_params.npz' % expname,*[p.get_value() for p in disc_params])
+    np.savez('%s.gen_params.npz' % expname,*[p.get_value() for p in gen_params])
 
 
 
