@@ -14,6 +14,7 @@ import scipy
 import scipy.misc
 import plotting
 import cifar10_data
+from zca_bn import ZCA
 
 # settings
 parser = argparse.ArgumentParser()
@@ -33,11 +34,14 @@ rng = np.random.RandomState(args.seed)
 theano_rng = MRG_RandomStreams(rng.randint(2 ** 15))
 lasagne.random.set_rng(np.random.RandomState(rng.randint(2 ** 15)))
 
-# load CIFAR-10
+# load and whiten CIFAR-10
 trainx, trainy = cifar10_data.load(args.data_dir, subset='train')
+whitener = ZCA(x=trainx)
+trainx = whitener.apply(trainx)
 trainx_unl = trainx.copy()
 trainx_unl2 = trainx.copy()
 testx, testy = cifar10_data.load(args.data_dir, subset='test')
+testx = whitener.apply(testx)
 nr_batches_train = int(trainx.shape[0]/args.batch_size)
 nr_batches_test = int(testx.shape[0]/args.batch_size)
 
@@ -190,7 +194,7 @@ def augment(X, p=2):
         X_aug[i,:,:,:] = X[i, :, ofs0:ofs0+32, ofs1:ofs1+32]
     return X_aug
 
-ramp_time = 30
+ramp_time = 60
 def rampup(epoch):
     if epoch < ramp_time:
         p = max(0.0, float(epoch)) / float(ramp_time)
@@ -209,7 +213,7 @@ for epoch in range(900):
     begin = time.time()
 
     # set unsupervised weight
-    scaled_unsup_weight_max = 100
+    scaled_unsup_weight_max = 30
     rampup_value = rampup(epoch)
     unsup_weight = rampup_value * scaled_unsup_weight_max
     unsup_weight = np.cast[th.config.floatX](unsup_weight)
@@ -283,10 +287,10 @@ for epoch in range(900):
         test_pred[first_ind:last_ind] = test_batch(testx[first_ind:last_ind])
     test_err = np.mean(np.argmax(test_pred,axis=1) != testy)
 
-    ensemble_prediction_lab = (0.5 * ensemble_prediction_lab) + (1.0 - 0.5) * epoch_prediction_lab
-    training_targets_lab = ensemble_prediction_lab / (1.0 - 0.5 ** (epoch + 1.0))
-    ensemble_prediction_unl = (0.5 * ensemble_prediction_unl) + (1.0 - 0.5) * epoch_prediction_unl
-    training_targets_unl = ensemble_prediction_unl / (1.0 - 0.5 ** (epoch + 1.0))
+    ensemble_prediction_lab = (0.6 * ensemble_prediction_lab) + (1.0 - 0.6) * epoch_prediction_lab
+    training_targets_lab = ensemble_prediction_lab / (1.0 - 0.6 ** (epoch + 1.0))
+    ensemble_prediction_unl = (0.6 * ensemble_prediction_unl) + (1.0 - 0.6) * epoch_prediction_unl
+    training_targets_unl = ensemble_prediction_unl / (1.0 - 0.6 ** (epoch + 1.0))
 
     expname = 'cifar10-ali-temodel-%.4fuw-annealing-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
     out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
