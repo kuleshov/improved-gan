@@ -193,8 +193,10 @@ for epoch in range(900):
     for t in range(int(np.ceil(trainx_unl.shape[0]/float(txs.shape[0])))):
         inds = rng.permutation(txs.shape[0])
         trainx.append(txs[inds])
-        trainxa.append(augment(txs[inds]))
-        trainxb.append(augment(txs[inds]))
+        # trainxa.append(augment(txs[inds]))
+        # trainxb.append(augment(txs[inds]))
+        trainxa.append((txs[inds]))
+        trainxb.append((txs[inds]))
         trainy.append(tys[inds])
     trainx = np.concatenate(trainx, axis=0)
     trainxa = np.concatenate(trainxa, axis=0)
@@ -202,8 +204,10 @@ for epoch in range(900):
     trainy = np.concatenate(trainy, axis=0)
     trainx_unl = trainx_unl[rng.permutation(trainx_unl.shape[0])]
     
-    trainx_unla = augment(trainx_unl)
-    trainx_unlb = augment(trainx_unl)
+    # trainx_unla = augment(trainx_unl)
+    # trainx_unlb = augment(trainx_unl)
+    trainx_unla = (trainx_unl)
+    trainx_unlb = (trainx_unl)
 
     # print 'making samples...'
     # for i in range(5):
@@ -249,8 +253,12 @@ for epoch in range(900):
         test_pred[first_ind:last_ind] = test_batch(testx[first_ind:last_ind])
     test_err = np.mean(np.argmax(test_pred,axis=1) != testy)
 
-    print("Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err))
+    expname = 'ali-pimodel-%.4fuw-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
+    out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
+    print(out_str)
     sys.stdout.flush()
+    with open(expname + '.log', 'a') as f:
+        f.write(out_str + '\n')
 
     # sample
     imgs = samplefun()
@@ -263,8 +271,8 @@ for epoch in range(900):
     scipy.misc.imsave("svhn_sample_feature_match.png", imgs)
 
     # save params
-    np.savez('disc_params.npz',*[p.get_value() for p in disc_params])
-    np.savez('gen_params.npz',*[p.get_value() for p in gen_params])
+    np.savez('%s.disc_params.npz' % expname,*[p.get_value() for p in disc_params])
+    np.savez('%s.gen_params.npz' % expname,*[p.get_value() for p in gen_params])
 
 
 
