@@ -233,7 +233,7 @@ for epoch in range(900):
     for t in range(int(np.ceil(trainx_unl.shape[0]/float(txs.shape[0])))):
         inds = rng.permutation(txs.shape[0])
         trainx.append(txs[inds])
-        trainxa.append(augment(txs[inds]))
+        trainxa.append((txs[inds]))
         trainy.append(tys[inds])
         lab_inds.append(inds)
     trainx = np.concatenate(trainx, axis=0)
@@ -242,7 +242,7 @@ for epoch in range(900):
     lab_inds = np.concatenate(lab_inds, axis=0)
 
     unl_inds = rng.permutation(trainx_unl.shape[0])
-    trainx_unl = augment(trainx_unl)
+    trainx_unl = (trainx_unl)
     # trainx_unl = trainx_unl[unl_inds]
 
     trainx_unl2 = trainx_unl2[rng.permutation(trainx_unl2.shape[0])]
@@ -293,7 +293,7 @@ for epoch in range(900):
     ensemble_prediction_unl = (0.5 * ensemble_prediction_unl) + (1.0 - 0.5) * epoch_prediction_unl
     training_targets_unl = ensemble_prediction_unl / (1.0 - 0.5 ** (epoch + 1.0))
 
-    expname = 'ali-temodel-%.4fuw-annealing-augment-seed%d' % (args.unlabeled_weight, args.seed)
+    expname = 'ali-temodel-%.4fuw-annealing-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
     out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
     print(out_str)
     sys.stdout.flush()
