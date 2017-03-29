@@ -213,7 +213,7 @@ for epoch in range(900):
     begin = time.time()
 
     # set unsupervised weight
-    scaled_unsup_weight_max = 30
+    scaled_unsup_weight_max = 30. * args.count * 10. / 52000.
     rampup_value = rampup(epoch)
     unsup_weight = rampup_value * scaled_unsup_weight_max
     unsup_weight = np.cast[th.config.floatX](unsup_weight)
@@ -292,7 +292,7 @@ for epoch in range(900):
     ensemble_prediction_unl = (0.6 * ensemble_prediction_unl) + (1.0 - 0.6) * epoch_prediction_unl
     training_targets_unl = ensemble_prediction_unl / (1.0 - 0.6 ** (epoch + 1.0))
 
-    expname = 'cifar10-ali-temodel-%.4fuw-annealing-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
+    expname = 'cifar10-ali-temodel-%.4fuw-corrected-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
     out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
     print(out_str)
     sys.stdout.flush()
