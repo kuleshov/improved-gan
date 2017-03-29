@@ -205,7 +205,7 @@ def augment(X, p=2):
         X_aug[i,:,:,:] = X[i, :, ofs0:ofs0+32, ofs1:ofs1+32]
     return X_aug
 
-ramp_time = 30
+ramp_time = 50
 def rampup(epoch):
     if epoch < ramp_time:
         p = max(0.0, float(epoch)) / float(ramp_time)
