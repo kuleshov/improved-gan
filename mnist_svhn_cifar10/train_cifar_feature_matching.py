@@ -184,5 +184,5 @@ for epoch in range(1200):
     plotting.plt.savefig("cifar_sample_feature_match.png")
 
     # save params
-    #np.savez('disc_params.npz', *[p.get_value() for p in disc_params])
-    #np.savez('gen_params.npz', *[p.get_value() for p in gen_params])
+    np.savez('cifar.vanilla.disc_params.npz', *[p.get_value() for p in disc_params])
+    np.savez('cifar.vanilla.gen_params.npz', *[p.get_value() for p in gen_params])
