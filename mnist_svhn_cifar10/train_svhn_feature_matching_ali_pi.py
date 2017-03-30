@@ -114,6 +114,9 @@ temp = ll.get_output(genz_layers[-1], {x_input: x_lab}, deterministic=False, ini
 temp = ll.get_output(disc_layers[-1], {x_input: x_lab}, deterministic=False, init=True)
 init_updates = [u for l in gen_layers+disc_layers+discz_layers+genz_layers for u in getattr(l,'init_updates',[])]
 
+genz_lab = ll.get_output(genz_layers[-1], {x_input: x_lab})
+genz_unl = ll.get_output(genz_layers[-1], {x_input: x_unl})
+
 output_before_softmax_lab = ll.get_output(disc_layers[-1], {x_input: x_lab, z_input: genz_lab}, deterministic=False)
 output_before_softmax_unl = ll.get_output(disc_layers[-1], {x_input: x_unl, z_input: genz_unl}, deterministic=False)
 output_before_softmax_gen = ll.get_output(disc_layers[-1], {x_input: gen_dat}, deterministic=False)
@@ -136,7 +139,7 @@ loss_unl = -0.5*T.mean(l_unl) + 0.5*T.mean(T.nnet.softplus(l_unl)) + 0.5*T.mean(
 train_err = T.mean(T.neq(T.argmax(output_before_softmax_lab,axis=1),labels))
 
 # test error
-output_before_softmax = ll.get_output(disc_layers[-1], x_lab, deterministic=True)
+output_before_softmax = ll.get_output(disc_layers[-1], {x_input: x_lab, z_input: genz_lab}, deterministic=True)
 test_err = T.mean(T.neq(T.argmax(output_before_softmax,axis=1),labels))
 
 # Theano functions for training the disc net
@@ -253,7 +256,7 @@ for epoch in range(900):
     
     if epoch==0:
         print(trainx.shape)
-        init_param(trainx[:500]) # data based initialization
+        init_param(trainx[:100]) # data based initialization
 
     # train
     loss_lab = 0.
@@ -286,7 +289,7 @@ for epoch in range(900):
         test_pred[first_ind:last_ind] = test_batch(testx[first_ind:last_ind])
     test_err = np.mean(np.argmax(test_pred,axis=1) != testy)
 
-    expname = 'ali-pimodel-%.4fuw-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
+    expname = 'ali-pimodel-%.4fuw-trueali-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
     out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
     print(out_str)
     sys.stdout.flush()
