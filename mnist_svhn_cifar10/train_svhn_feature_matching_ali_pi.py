@@ -61,15 +61,12 @@ gen_layers.append(nn.weight_norm(nn.Deconv2DLayer(gen_layers[-1], (args.batch_si
 gen_dat = ll.get_output(gen_layers[-1])
 
 genz_layers = [x_input]
-genz_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(genz_layers[-1], 64, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz1')))
-genz_layers.append(ll.DropoutLayer(genz_layers[-1], p=0.5))
-genz_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(genz_layers[-1], 128, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz2')))
-genz_layers.append(ll.DropoutLayer(genz_layers[-1], p=0.5))
-# genz_layers.append(nn.weight_norm(dnn.Conv2DDNNLayer(genz_layers[-1], 256, (3,3), pad=0, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz3')))
-genz_layers.append(nn.weight_norm(ll.NINLayer(genz_layers[-1], num_units=128, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz5')))
+genz_layers.append(dnn.Conv2DDNNLayer(genz_layers[-1], 128, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz1'))
+genz_layers.append(nn.batch_norm(dnn.Conv2DDNNLayer(genz_layers[-1], 256, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz2'), g=None))
+genz_layers.append(nn.batch_norm(dnn.Conv2DDNNLayer(genz_layers[-1], 512, (3,3), pad=1, stride=2, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz2'), g=None))
+genz_layers.append(nn.batch_norm(ll.NINLayer(genz_layers[-1], num_units=512, W=Normal(0.05), nonlinearity=nn.lrelu, name='gz5'), g=None))
 genz_layers.append(ll.GlobalPoolLayer(genz_layers[-1], name='gz6'))
-genz_layers.append(nn.weight_norm(ll.DenseLayer(genz_layers[-1], num_units=100, W=Normal(0.05), nonlinearity=lasagne.nonlinearities.tanh, name='gz7'), train_g=True, init_stdv=0.1))
-genz_layers.append(ll.ReshapeLayer(genz_layers[-1], noise_dim))
+genz_layers.append(ll.DenseLayer(genz_layers[-1], num_units=100, W=Normal(0.05), nonlinearity=lasagne.nonlinearities.sigmoid, name='gz7'))
 
 
 # specify discriminative model
@@ -77,9 +74,9 @@ genz_layers.append(ll.ReshapeLayer(genz_layers[-1], noise_dim))
 # for z
 discz_layers = [z_input]
 discz_layers.append(ll.DropoutLayer(discz_layers[-1], p=0.2))
-discz_layers.append(nn.weight_norm(ll.DenseLayer(discz_layers[-1], 128, W=Normal(0.05), nonlinearity=nn.lrelu, name='dz1')))
+discz_layers.append(ll.DenseLayer(discz_layers[-1], 500, W=Normal(0.05), nonlinearity=nn.lrelu, name='dz1'))
 discz_layers.append(ll.DropoutLayer(discz_layers[-1], p=0.5))
-discz_layers.append(nn.weight_norm(ll.DenseLayer(discz_layers[-1], 64, W=Normal(0.05), nonlinearity=nn.lrelu, name='dz2')))
+discz_layers.append(ll.DenseLayer(discz_layers[-1], 250, W=Normal(0.05), nonlinearity=nn.lrelu, name='dz2'))
 discz_layers.append(ll.DropoutLayer(discz_layers[-1], p=0.5))
 
 # for x
@@ -289,7 +286,7 @@ for epoch in range(900):
         test_pred[first_ind:last_ind] = test_batch(testx[first_ind:last_ind])
     test_err = np.mean(np.argmax(test_pred,axis=1) != testy)
 
-    expname = 'ali-pimodel-%.4fuw-trueali-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
+    expname = 'ali-pimodel-%.4fuw-trueali-largerdz-noaugment-seed%d' % (args.unlabeled_weight, args.seed)
     out_str = "Experiment %s, Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, train err = %.4f, test err = %.4f" % (expname, epoch, time.time()-begin, loss_lab, loss_unl, train_err, test_err)
     print(out_str)
     sys.stdout.flush()
